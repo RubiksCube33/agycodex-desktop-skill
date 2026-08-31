@@ -1,8 +1,8 @@
 ﻿# Antigravity Codex Desktop Control Skill (`agycodex-desktop-skill`)
 
-Antigravity(AGY) 에이전트에서 로컬 PC에 실행 중인 **OpenAI Codex Desktop 앱(`ChatGPT.exe` / `codex app`)으로 직접 명령과 프롬프트를 전달하고 제어**하는 전용 브릿지 스킬입니다.
+Antigravity(AGY) 에이전트에서 로컬 PC에 실행 중인 **OpenAI Codex Desktop 앱(`ChatGPT.exe` / `codex app`)으로 직접 명령, 멀티모달 이미지, 프롬프트를 전달하고 제어**하는 전용 브릿지 스킬입니다.
 
-Antigravity와 대화하는 도중, 로컬 Codex Desktop의 **ChatGPT Plus/Pro 구독 혜택(내장 `GPT-Image-2`, 내장 멀티모달 도구 등)**을 종량제 API Key 비용 없이 완전히 자동화하여 호출할 수 있습니다.
+Antigravity와 대화하는 도중, 로컬 Codex Desktop의 **ChatGPT Plus/Pro 구독 혜택(내장 `GPT-Image-2`, 레퍼런스 이미지 기반 Image-to-Image 생성 등)**을 종량제 API Key 비용 없이 완전히 자동화하여 호출할 수 있습니다.
 
 ---
 
@@ -47,14 +47,16 @@ uv --version
 
 Antigravity에게 평소처럼 자연어로 지시하면, Antigravity가 백그라운드에서 Codex Desktop을 원격 조종하여 아래와 같은 실무 작업들을 수행합니다:
 
-### 1. 🎨 `GPT-Image-2` 기반 고화질 이미지 생성 및 에셋 자동 회수
+### 1. 🎨 `GPT-Image-2` 텍스트 & 레퍼런스 이미지 기반 생성 및 자동 회수
 * **어떤 일인가요?**: 
-  OpenAI의 최신 이미지 생성 모델인 **`GPT-Image-2`**를 호출하여 1024×1024부터 2K/4K 해상도의 이미지를 생성하고, 생성된 결과 파일을 현재 내 작업 폴더로 즉시 복사해옵니다.
+  * 텍스트 프롬프트만으로 2K/4K 고화질 이미지를 생성합니다.
+  * **원하는 캐릭터/스타일 사진을 첨부(Image-to-Image)**하여, 원본 작화와 디자인을 유지한 채 새로운 동작·배경·포즈로 변환합니다.
+  * 생성된 결과 이미지는 `$CODEX_HOME/generated_images/`에서 내 작업 폴더로 즉시 자동 복사됩니다.
 * **장점**: 
   별도의 OpenAI Platform 종량제 API Key 충전 없이, **기존 ChatGPT Plus/Pro 구독 풀(Pool)**을 활용합니다.
 * **실제 지시 예시**:
   * *"Codex 데스크톱에 네온 사이버펑크 도시 야경 2K 해상도로 그려달라고 해줘"*
-  * *"Codex로 제품 목업용 세라믹 머그잔 이미지 생성해서 작업 폴더로 가져와줘"*
+  * *"첨부한 이 캐릭터 그림(`character.png`)의 얼굴과 제복 스타일을 유지하면서 춤추는 전신 포즈로 그려줘"*
   * *"방금 Codex가 만든 이미지 현재 폴더에 `banner.png`로 저장해줘"*
 
 ---
@@ -88,7 +90,7 @@ Antigravity에게 평소처럼 자연어로 지시하면, Antigravity가 백그�
 ## 🏗️ 아키텍처 흐름도
 
 ```text
-[ Antigravity Agent ]
+[ Antigravity Agent ] (프롬프트 + 레퍼런스 이미지 첨부)
         │
         ▼ (스킬 호출)
 [ codex_bridge.py / codex CLI ]
@@ -125,8 +127,8 @@ Antigravity에게 평소처럼 자연어로 지시하면, Antigravity가 백그�
 스킬이 설치되면 Antigravity가 자동으로 도구를 인식하므로, 평소처럼 대화하시면 됩니다:
 
 * *"Codex 데스크톱에 노을 지는 웅장한 폭포 고화질로 생성하라고 해줘"*
+* *"이 캐릭터 사진 첨부해서 춤추는 동작으로 다시 그려줘"*
 * *"Codex 새 대화 열고 [프롬프트] 실행해줘"*
-* *"지금 Codex Desktop에 열린 세션들 확인해줘"*
 * *"Codex가 생성한 최신 그림 내 폴더로 가져와줘"*
 
 ---
@@ -137,11 +139,11 @@ Antigravity에게 평소처럼 자연어로 지시하면, Antigravity가 백그�
 # 1. 활성 세션(스레드) 목록 확인
 uv run python skills/codex-desktop-control/scripts/codex_bridge.py list -n 5
 
-# 2. 특정 세션에 프롬프트 전송 (데스크톱 앱 화면에 실시간 입력 및 실행됨)
-uv run python skills/codex-desktop-control/scripts/codex_bridge.py queue --thread "<세션_UUID>" --message "원하는 지시사항"
+# 2. 특정 세션에 프롬프트 및 레퍼런스 이미지 전송
+uv run python skills/codex-desktop-control/scripts/codex_bridge.py queue --thread "<세션_UUID>" --message "이 캐릭터가 달리는 모습으로 그려줘" -i "character.png"
 
-# 3. 사이드바에 표시되는 새 세션 생성
-uv run python skills/codex-desktop-control/scripts/codex_bridge.py new --prompt "새 대화를 시작합니다."
+# 3. 사이드바에 표시되는 새 세션 생성 (이미지 첨부 포함)
+uv run python skills/codex-desktop-control/scripts/codex_bridge.py new --prompt "이 인물이 춤추는 포즈로 그려줘" -i "reference.png"
 
 # 4. 가장 최근에 생성된 이미지 현재 폴더로 가져오기
 uv run python skills/codex-desktop-control/scripts/codex_bridge.py fetch-image --dest "./output.png"

@@ -1,7 +1,7 @@
 ﻿"""Codex Desktop Bridge Script for Antigravity.
 
 Provides automated control over OpenAI Codex Desktop sessions, queue injection,
-session lifecycle, and generated asset retrieval.
+session lifecycle, multi-modal image input, and generated asset retrieval.
 """
 
 from __future__ import annotations
@@ -54,9 +54,20 @@ def list_threads(limit: int = 10) -> List[Dict[str, Any]]:
     ]
 
 
-def queue_message(thread_id: str, message: str) -> bool:
+def queue_message(thread_id: str, message: str, images: Optional[List[str]] = None) -> bool:
     cmd = ["codex", "queue", "--thread", thread_id, "--message", message]
-    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if images:
+        for img in images:
+            cmd.extend(["-i", str(Path(img).resolve())])
+
+    res = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+    )
     if res.returncode == 0:
         print(res.stdout.strip())
         return True
@@ -68,6 +79,7 @@ def queue_message(thread_id: str, message: str) -> bool:
 def create_new_session(
     prompt: str,
     cwd: Optional[str] = None,
+    images: Optional[List[str]] = None,
     make_visible: bool = True,
 ) -> Optional[str]:
     target_dir = Path(cwd) if cwd else (Path.home() / "Documents" / "Codex" / time.strftime("%Y-%m-%d") / "new-chat")
@@ -79,9 +91,20 @@ def create_new_session(
         "-C",
         str(target_dir),
         "--dangerously-bypass-approvals-and-sandbox",
-        prompt,
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if images:
+        for img in images:
+            cmd.extend(["-i", str(Path(img).resolve())])
+
+    # Pass prompt via stdin with automatic EOF
+    res = subprocess.run(
+        cmd,
+        input=prompt,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if res.returncode != 0:
         print(f"Error running codex exec: {res.stderr.strip()}", file=sys.stderr)
         return None
@@ -139,11 +162,13 @@ def main():
     queue_p = subparsers.add_parser("queue", help="Queue message to a session")
     queue_p.add_argument("--thread", required=True, help="Thread UUID")
     queue_p.add_argument("--message", required=True, help="Message text")
+    queue_p.add_argument("-i", "--image", nargs="*", default=[], help="Image path(s) to attach")
 
     # new
     new_p = subparsers.add_parser("new", help="Create a new session")
     new_p.add_argument("--prompt", required=True, help="Initial prompt")
     new_p.add_argument("--cwd", help="Working directory (default: auto projectless scratch)")
+    new_p.add_argument("-i", "--image", nargs="*", default=[], help="Image path(s) to attach")
     new_p.add_argument("--hidden", action="store_true", help="Keep hidden from desktop sidebar")
 
     # fetch-image
@@ -156,9 +181,9 @@ def main():
         threads = list_threads(limit=args.limit)
         print(json.dumps(threads, indent=2, ensure_ascii=False))
     elif args.command == "queue":
-        queue_message(args.thread, args.message)
+        queue_message(args.thread, args.message, images=args.image)
     elif args.command == "new":
-        create_new_session(args.prompt, cwd=args.cwd, make_visible=not args.hidden)
+        create_new_session(args.prompt, cwd=args.cwd, images=args.image, make_visible=not args.hidden)
     elif args.command == "fetch-image":
         get_latest_generated_image(args.dest)
 
