@@ -1,6 +1,6 @@
 ﻿# Antigravity Codex Desktop Control Skill (`agycodex-desktop-skill`)
 
-Antigravity(AGY) 에이전트에서 로컬 PC에 실행 중인 **OpenAI Codex Desktop 앱(`ChatGPT.exe` / `codex app`)으로 직접 명령과 프롬프트를 주입하고 제어**하는 전용 브릿지 스킬입니다.
+Antigravity(AGY) 에이전트에서 로컬 PC에 실행 중인 **OpenAI Codex Desktop 앱(`ChatGPT.exe` / `codex app`)으로 직접 명령과 프롬프트를 전달하고 제어**하는 전용 브릿지 스킬입니다.
 
 Antigravity와 대화하는 도중, 로컬 Codex Desktop의 **ChatGPT Plus/Pro 구독 혜택(내장 `GPT-Image-2`, 내장 멀티모달 도구 등)**을 종량제 API Key 비용 없이 완전히 자동화하여 호출할 수 있습니다.
 
@@ -61,10 +61,10 @@ Antigravity에게 평소처럼 자연어로 지시하면, Antigravity가 백그�
 
 ### 2. 🔀 병렬 작업 분담 및 서브 에이전트 위임 (Multi-Agent Workflow)
 * **어떤 일인가요?**: 
-  Antigravity가 메인 코딩이나 복잡한 구현을 진행하는 동안, 무거운 탐색·문서화·코드 리뷰 작업을 **Codex Desktop 세션에 비동기로 큐잉(Queueing)**하여 병렬로 처리시킵니다.
+  Antigravity가 메인 코딩이나 복잡한 구현을 진행하는 동안, 무거운 탐색·문서화·코드 리뷰 작업을 **Codex Desktop 세션에 비동기 대기열(Queue)로 전달**하여 백그라운드에서 병렬로 처리시킵니다.
 * **실제 지시 예시**:
   * *"이 모듈 리팩토링 설계안 검토 작업을 Codex 데스크톱 세션에 넘겨서 분석시켜줘"*
-  * *"Codex 데스크톱에 이 API 명세서 초안 작성하도록 큐에 넣어두고, 우리는 다음 코드 작성하자"*
+  * *"Codex 데스크톱에 이 API 명세서 초안 작성하도록 대기열에 넣어두고, 우리는 다음 코드 작성하자"*
 
 ---
 
@@ -77,7 +77,7 @@ Antigravity에게 평소처럼 자연어로 지시하면, Antigravity가 백그�
 
 ---
 
-### 4. 🧹 세션 라이프사이클 및 백그라운드 큐 관리
+### 4. 🧹 세션 라이프사이클 및 백그라운드 대기열 관리
 * **어떤 일인가요?**: 
   작업이 끝난 세션을 원격으로 영구 삭제(`codex delete`)하거나 아카이브하여 사이드바를 깔끔하게 유지합니다.
 * **실제 지시 예시**:
@@ -93,10 +93,10 @@ Antigravity에게 평소처럼 자연어로 지시하면, Antigravity가 백그�
         ▼ (스킬 호출)
 [ codex_bridge.py / codex CLI ]
         │
-        ▼ (비동기 IPC INSERT)
+        ▼ (명령을 로컬 대기열에 저장)
 [ queue_1.sqlite / state_5.sqlite ]
         │
-        ▼ (실시간 Dequeue 및 작업 소비)
+        ▼ (대기 중인 명령을 실시간으로 가져와 자동 실행)
 [ Codex Desktop App (ChatGPT.exe) ] ──▶ (ChatGPT Plus/Pro 구독으로 GPT-Image-2 / 추론 실행)
         │
         ▼ (결과 파일 출력)
@@ -137,7 +137,7 @@ Antigravity에게 평소처럼 자연어로 지시하면, Antigravity가 백그�
 # 1. 활성 세션(스레드) 목록 확인
 uv run python skills/codex-desktop-control/scripts/codex_bridge.py list -n 5
 
-# 2. 특정 세션에 프롬프트 전송 (데스크톱 앱 화면에 실시간 입력됨)
+# 2. 특정 세션에 프롬프트 전송 (데스크톱 앱 화면에 실시간 입력 및 실행됨)
 uv run python skills/codex-desktop-control/scripts/codex_bridge.py queue --thread "<세션_UUID>" --message "원하는 지시사항"
 
 # 3. 사이드바에 표시되는 새 세션 생성
