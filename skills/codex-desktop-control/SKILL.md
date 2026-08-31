@@ -7,47 +7,68 @@ description: Control and automate OpenAI Codex Desktop on the local PC. Use this
 
 This skill enables Antigravity to programmatically control the local OpenAI Codex Desktop app (`ChatGPT.exe` / `codex app`) using native IPC queues and SQLite state synchronization.
 
-## Key Capabilities
+---
 
-1. **Queueing Messages into Desktop Sessions (`codex queue`)**:
-   - Injects user instructions directly into active Codex Desktop threads.
-   - Runs with the user's **ChatGPT Subscription (Plus/Pro)** and built-in tools (such as `GPT-Image-2`) without requiring separate API keys.
+## ⚠️ Critical Execution Guardrail: Stdin Hanging Prevention
 
-2. **Session Lifecycle Management**:
-   - Create project-bound or projectless (`new-chat`) conversations.
-   - Automatically sets thread visibility (`source = 'vscode'`) so new sessions immediately show up in the Codex Desktop sidebar.
+> [!CAUTION]
+> **NEVER execute raw, unpiped `codex exec` commands directly in PowerShell.**
+> In Windows PowerShell, running `codex exec <prompt>` without closing standard input causes `codex.exe` to hang indefinitely waiting for EOF on stdin (`Reading additional input from stdin...`), stalling the background process.
 
-3. **Generated Asset Retrieval**:
-   - Monitors `$CODEX_HOME/generated_images/` and automatically pulls newly created image assets into the current project workspace.
+### Safe Execution Rules:
+1. **Always Prefer `codex_bridge.py`**:
+   The bridge script properly handles process subprocess pipes, timeout, and stdin isolation automatically.
+   ```bash
+   python "C:\Users\pos06\.gemini\config\skills\codex-desktop-control\scripts\codex_bridge.py" <subcommand> [options]
+   ```
+2. **For Active Desktop Sessions**:
+   Use `codex queue` or `codex_bridge.py queue`. `codex queue` writes directly to SQLite and never blocks on stdin:
+   ```bash
+   codex queue --thread "<THREAD_UUID>" --message "<PROMPT>"
+   ```
+3. **If `codex exec` MUST be called directly**:
+   You **MUST** pipe the prompt through `cmd.exe /c "echo ... | codex exec ..."` or `$null | codex exec ...` so stdin is explicitly closed:
+   ```powershell
+   cmd.exe /c "echo <PROMPT> | codex exec -C ""<DIR>"" --dangerously-bypass-approvals-and-sandbox"
+   ```
 
 ---
 
-## Python Bridge CLI (`scripts/codex_bridge.py`)
+## 🛠️ Python Bridge CLI (`scripts/codex_bridge.py`)
 
-Run via `uv` or Python:
-
-```bash
-& "$HOME\.local\bin\uv.exe" run python "C:\Users\pos06\.gemini\config\skills\codex-desktop-control\scripts\codex_bridge.py" <command> [options]
-```
+Run via `python` or `uv run python`:
 
 ### Subcommands
 
-* **List Recent Threads**:
+* **1. List Recent Threads**:
   ```bash
-  uv run python codex_bridge.py list -n 5
+  python "C:\Users\pos06\.gemini\config\skills\codex-desktop-control\scripts\codex_bridge.py" list -n 5
   ```
 
-* **Queue Message into Session**:
+* **2. Queue Message into Desktop Session** *(ChatGPT Subscription / GPT-Image-2)*:
   ```bash
-  uv run python codex_bridge.py queue --thread "<THREAD_UUID>" --message "<PROMPT>"
+  python "C:\Users\pos06\.gemini\config\skills\codex-desktop-control\scripts\codex_bridge.py" queue --thread "<THREAD_UUID>" --message "<PROMPT>"
   ```
 
-* **Create New Visible Session**:
+* **3. Create New Visible Session** *(Appears in Desktop Sidebar)*:
   ```bash
-  uv run python codex_bridge.py new --prompt "안녕하세요!"
+  python "C:\Users\pos06\.gemini\config\skills\codex-desktop-control\scripts\codex_bridge.py" new --prompt "<INITIAL_PROMPT>"
   ```
 
-* **Fetch Latest Generated Image**:
+* **4. Fetch Latest Generated Image**:
   ```bash
-  uv run python codex_bridge.py fetch-image --dest "path/to/destination.png"
+  python "C:\Users\pos06\.gemini\config\skills\codex-desktop-control\scripts\codex_bridge.py" fetch-image --dest "./output.png"
   ```
+
+---
+
+## 📋 Standard Workflow for Tasks
+
+1. **For Image Generation Requests**:
+   - Check active threads or create a new session via `codex_bridge.py new`.
+   - Queue the prompt instructing Codex to use its built-in `GPT-Image-2` tool.
+   - Once completed, run `codex_bridge.py fetch-image --dest "<TARGET_PATH>"` to copy the image to the workspace and present it to the user.
+
+2. **For Subagent / Async Delegation**:
+   - Queue the task into an active thread using `codex queue`.
+   - The Desktop app will process it in the background using the user's ChatGPT subscription.
